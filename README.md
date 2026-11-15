@@ -15,6 +15,8 @@ python3 .agents/skills/notebooklm-project-handoff/scripts/lookup.py \
 
 The command returns two source-labeled excerpts in one call. In your own project, Codex starts with the handoff and local evidence, then uses NotebookLM only for facts it still needs.
 
+See the [live verification](docs/one-question-handoff.md) for a fresh agent that found the gateway board and sensor models with one NotebookLM question.
+
 ## Quick start
 
 **Requires Git and Python 3.10+.** Run from the root of the project you want to set up.
