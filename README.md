@@ -66,17 +66,40 @@ The publisher can be run from a local scheduler if you want updates outside Code
 
 ## Token benchmark
 
-We ran three questions twice per workflow on the same project snapshot with Codex CLI 0.169.0-alpha.11.1 and `gpt-6.1-sol` at low reasoning effort. Both variants in a pair received the same files, handoff, and question. The skill variant also had the skill, its example project instructions, and a configured NotebookLM note. When a chat asked for a missing fact, it received a scripted reply and that extra turn counted. All final answers contained both expected facts.
+These measurements use Codex CLI 0.169.0-alpha.11.1 and `gpt-6.1-sol` at low reasoning effort. Total tokens are reported Codex input plus output, including cached input. The tables show small samples with normal caching. They do not estimate billing or NotebookLM's internal token use.
 
-| Where the requested facts were available | Total tokens without skill | Total tokens with skill | Change | NotebookLM requests with skill |
-| --- | ---: | ---: | ---: | ---: |
-| Complete handoff and local files | 284,481 | 319,087 | +12.2% | 0 |
-| Relevant facts in README | 343,665 | 334,922 | −2.5% | 0 |
-| Missing fact only in NotebookLM | 955,655 | 865,354 | −9.4% | 7 |
+### Complete handoff, no tool calls
 
-Totals combine reported Codex input and output across six runs per variant. Uncached input increased from 34,165 to 42,690 with a complete handoff and from 45,290 to 48,957 when README was sufficient. It decreased from 181,820 to 64,274 when NotebookLM was needed. In that last scenario, the skill answered without asking the user in all six runs. The control asked six times.
+Three questions, four paired repetitions each. Both chats in a pair ran in the same directory with identical `AGENTS.md`, handoff, and output instructions. Every answer was available directly in the handoff. The only setup change was whether the skill folder was installed. The prompt asked for a fixed answer format and prohibited tool use. JSONL logs confirm zero calls of any kind in both groups. A separate prompt inspection confirmed that the installed skill appeared in Codex's skill catalog.
 
-In a separate README run, a section labeled as test data caused two NotebookLM checks. Total tokens rose from 411,002 to 537,007 (+30.7%). In the table above, both workflows were explicitly told that README contained confirmed conditions for the exercise. The samples are small, caching was left enabled, and we did not measure billing or NotebookLM's internal token use.
+| Metric | Without skill | Skill installed |
+| --- | ---: | ---: |
+| Correct answers | 12/12 | 12/12 |
+| Tool calls | 0 | 0 |
+| Total Codex tokens | 194,319 | 201,542 (+3.7%) |
+| Median total per run | 15,797 | 15,907 |
+| Uncached input tokens | 37,931 | 41,570 |
+
+The median **paired** difference was **+92.5 tokens** with the skill installed. Per-pair differences ranged from −1,447 to +2,787, even with identical final answers and no tool calls. The result measures observed session usage with the catalog entry present. It does not establish a fixed overhead per chat.
+
+### When the chat has to find facts
+
+Each row compares six runs per variant, using three questions and two repetitions on matched project snapshots. The skill variant included the skill, its example `AGENTS.md`, and an authenticated NotebookLM note. A scripted answer was available to both variants if a missing fact led to a clarification. All turns, including the follow-up turns, count. Both variants reached **6/6 correct final answers** in every row.
+
+| Starting context | Tokens without skill | Tokens with skill | Change | Clarifications without → with | NotebookLM calls with skill |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Handoff and local files suffice | 284,481 | 319,087 | +12.2% | 0 → 0 | 0 |
+| Confirmed facts in README suffice | 343,665 | 334,922 | −2.5% | 0 → 0 | 0 |
+| A missing fact is only in NotebookLM | 955,655 | 865,354 | −9.4% | 6 → 0 | 7 |
+| Weak handoff | 875,591 | 701,722 | −19.9% | 4 → 0 | 4 |
+| Stale handoff | 863,529 | 745,669 | −13.6% | 4 → 0 | 4 |
+| No handoff | 857,131 | 759,104 | −11.4% | 4 → 0 | 5 |
+
+In the first row, no run opened `SKILL.md` or queried NotebookLM. The installed workflow ran 14 local commands, compared with 10 in the control. The +12.2% is the observed difference between those workflows, with different local reads and tool outputs.
+
+In the three startup scenarios, one question was answerable locally and two needed a fact from the notebook. The six locally answerable runs with the skill made zero NotebookLM calls. The 12 runs with a missing fact read the note, with one additional notebook-list call in the no-handoff scenario. The stale handoff explicitly described a prior run and contained conflicting values. This test did not cover an outdated handoff presented as current.
+
+Uncached input rose in the first two rows, from 34,165 to 42,690 and from 45,290 to 48,957, respectively. In a separate README run, a section labeled as test data prompted two NotebookLM checks, and total tokens rose from 411,002 to 537,007 (+30.7%). The confirmed-README row above uses the same confirmation of the exercise facts in both variants.
 
 ### Summary update check
 
