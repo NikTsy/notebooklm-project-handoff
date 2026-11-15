@@ -66,9 +66,51 @@ The publisher can be run from a local scheduler if you want updates outside Code
 
 ## Token benchmark
 
+| If you… | What we measured | Practical effect |
+| --- | --- | --- |
+| Start with a **complete handoff** | **+89–90 input tokens** in pairs with the same skill catalog | Zero tool calls in either group |
+| Start with a **weak, stale, or missing handoff** | **11–20% fewer total tokens** with the skill | User clarifications fell from 4 to 0 in each scenario |
+| **Drop two repeat photos** from the same text handoff | **25.2% fewer total tokens** | Same accuracy: 4/4 complete answers |
+
 These measurements use Codex CLI 0.169.0-alpha.11.1 and `gpt-6.1-sol` at low reasoning effort. Total tokens are reported Codex input plus output, including cached input. The tables show small samples with normal caching. They do not estimate billing or NotebookLM's internal token use.
 
+### When the chat has to find facts
+
+**Same final accuracy in every row:** 6/6 with and without the skill. NotebookLM was used only where a fact was missing from the handoff and local files in the confirmed-input scenarios below.
+
+| Starting context | Tokens without skill | Tokens with skill | Change | Clarifications without → with | NotebookLM calls with skill |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Handoff and local files suffice | 284,481 | 319,087 | +12.2% | 0 → 0 | 0 |
+| Confirmed facts in README suffice | 343,665 | 334,922 | −2.5% | 0 → 0 | 0 |
+| A missing fact is only in NotebookLM | 955,655 | 865,354 | −9.4% | 6 → 0 | 7 |
+| Weak handoff | 875,591 | 701,722 | −19.9% | 4 → 0 | 4 |
+| Stale handoff | 863,529 | 745,669 | −13.6% | 4 → 0 | 4 |
+| No handoff | 857,131 | 759,104 | −11.4% | 4 → 0 | 5 |
+
+<details>
+<summary>Setup, exceptions, and what counted</summary>
+
+Each row compares six runs per variant, using three questions and two repetitions on matched project snapshots. The skill variant included the skill, its example `AGENTS.md`, and an authenticated NotebookLM note. A scripted answer was available to both variants if a missing fact led to a clarification. All turns, including the follow-up turns, count. Both variants reached **6/6 correct final answers** in every row.
+
+In the first row, no run opened `SKILL.md` or queried NotebookLM. The installed workflow ran 14 local commands, compared with 10 in the control. The +12.2% is the observed difference between those workflows, with different local reads and tool outputs.
+
+In the three startup scenarios, one question was answerable locally and two needed a fact from the notebook. The six locally answerable runs with the skill made zero NotebookLM calls. The 12 runs with a missing fact read the note, with one additional notebook-list call in the no-handoff scenario. The stale handoff explicitly described a prior run and contained conflicting values. This test did not cover an outdated handoff presented as current.
+
+Uncached input rose in the first two rows, from 34,165 to 42,690 and from 45,290 to 48,957, respectively. In a separate README run, a section labeled as test data prompted two NotebookLM checks, and total tokens rose from 411,002 to 537,007 (+30.7%). The confirmed-README row above uses the same confirmation of the exercise facts in both variants.
+
+</details>
+
 ### Complete handoff, no tool calls
+
+**Zero tool calls, 12/12 correct in each group.** With the same background catalog, installing the skill added **89–90 input tokens** in the traced repeat. The unadjusted totals include variation in the catalog Codex sent with the request.
+
+| Runs | Without skill | Skill installed | Change |
+| --- | ---: | ---: | ---: |
+| Original 12 pairs | 194,319 | 201,542 | +3.7% |
+| Repeat with request tracing, 12 pairs | 192,222 | 195,988 | +2.0% |
+
+<details>
+<summary>Controlled setup, original measurements, and request trace</summary>
 
 Three questions, four paired repetitions each. Both chats in a pair ran in the same directory with identical `AGENTS.md`, handoff, and output instructions. Every answer was available directly in the handoff. The only setup change was whether the skill folder was installed. The prompt asked for a fixed answer format and prohibited tool use. JSONL logs confirm zero calls of any kind in both groups. A separate prompt inspection confirmed that the installed skill appeared in Codex's skill catalog.
 
@@ -92,34 +134,9 @@ The last two pairs explain 77% of the net increase. Final answers and output tok
 
 **Repeat with request tracing.** Another 12 pairs all answered correctly and made zero tool calls. Codex's rollout trace captured one request per run. In the nine pairs with the same background skill catalog, installing this skill added **89–90 input tokens**. In two installed runs and one control run, Codex injected a catalog with **33 additional environment skills**. Comparing the same question and installation state, the expanded catalog corresponded to **2,694 extra input tokens**. This reproduces the size of the earlier outliers alongside the small difference associated with this skill's listing. The original payloads are unavailable, so their exact contents cannot be confirmed.
 
-The traced repeat totaled 192,222 tokens without the skill and 195,988 with it (+2.0%). Catalog changes occurred in both variants. Treat the aggregate as observed session usage and the matched-catalog comparison as the closer estimate of the listing's overhead in this setup.
-
-### When the chat has to find facts
-
-Each row compares six runs per variant, using three questions and two repetitions on matched project snapshots. The skill variant included the skill, its example `AGENTS.md`, and an authenticated NotebookLM note. A scripted answer was available to both variants if a missing fact led to a clarification. All turns, including the follow-up turns, count. Both variants reached **6/6 correct final answers** in every row.
-
-| Starting context | Tokens without skill | Tokens with skill | Change | Clarifications without → with | NotebookLM calls with skill |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Handoff and local files suffice | 284,481 | 319,087 | +12.2% | 0 → 0 | 0 |
-| Confirmed facts in README suffice | 343,665 | 334,922 | −2.5% | 0 → 0 | 0 |
-| A missing fact is only in NotebookLM | 955,655 | 865,354 | −9.4% | 6 → 0 | 7 |
-| Weak handoff | 875,591 | 701,722 | −19.9% | 4 → 0 | 4 |
-| Stale handoff | 863,529 | 745,669 | −13.6% | 4 → 0 | 4 |
-| No handoff | 857,131 | 759,104 | −11.4% | 4 → 0 | 5 |
-
-In the first row, no run opened `SKILL.md` or queried NotebookLM. The installed workflow ran 14 local commands, compared with 10 in the control. The +12.2% is the observed difference between those workflows, with different local reads and tool outputs.
-
-In the three startup scenarios, one question was answerable locally and two needed a fact from the notebook. The six locally answerable runs with the skill made zero NotebookLM calls. The 12 runs with a missing fact read the note, with one additional notebook-list call in the no-handoff scenario. The stale handoff explicitly described a prior run and contained conflicting values. This test did not cover an outdated handoff presented as current.
-
-Uncached input rose in the first two rows, from 34,165 to 42,690 and from 45,290 to 48,957, respectively. In a separate README run, a section labeled as test data prompted two NotebookLM checks, and total tokens rose from 411,002 to 537,007 (+30.7%). The confirmed-README row above uses the same confirmation of the exercise facts in both variants.
-
-### Summary update check
-
-A new chat updated the local summary and published it to one existing NotebookLM note. A second chat received the same request and got `Unchanged`. We verified that the note ID and count stayed the same and that its text matched the file.
+</details>
 
 ### Photo benchmark
-
-Four fresh chats per mode answered the same question about the board, chip, and soil sensor model. We used public reference photos of the **same models used in the project**, since the original project photos were unavailable. The images were 2398 × 2398 and 512 × 512. Model and settings matched the benchmark above. Web lookup and NotebookLM were excluded. [MuseLab board photo](https://github.com/wuxx/nanoESP32-C6/blob/master/README_en.md) · [Zigbee2MQTT sensor photo](https://www.zigbee2mqtt.io/devices/ZG-303Z.html)
 
 **Keep confirmed model names in the handoff.** In the matched test, dropping the two photos cut median total tokens by **25.2%** with the same text, question, and accuracy.
 
@@ -129,4 +146,17 @@ Four fresh chats per mode answered the same question about the board, chip, and 
 | Replace photos alone with confirmed facts | 23,029 | 17,193 | −25.3% | 0/4 → 4/4 |
 | Include facts from `PROJECT_CONTEXT.md` directly in the handoff | 31,817 | 17,193 | −46.0% | 4/4 → 4/4 |
 
+**Images:** public reference photos of the same models used in the project. The original project photos were unavailable. [MuseLab board photo](https://github.com/wuxx/nanoESP32-C6/blob/master/README_en.md) · [Zigbee2MQTT sensor photo](https://www.zigbee2mqtt.io/devices/ZG-303Z.html)
+
+<details>
+<summary>Photo test setup and limitations</summary>
+
+Four fresh chats per mode answered the same question about the board, chip, and soil sensor model. The images were 2398 × 2398 and 512 × 512. Model and settings matched the benchmark above. Web lookup and NotebookLM were excluded.
+
 With photos alone, all four chats identified the chip and left the exact board and sensor models unknown. Reading the local file required an extra tool call and cost more than receiving the short text in this setup. The first row compares the same facts with and without photos. The other rows compare different ways of supplying evidence. Totals include cached input and depend on the images, model, and tool calls.
+
+</details>
+
+### Summary update check
+
+A new chat updated the local summary and published it to one existing NotebookLM note. A second chat received the same request and got `Unchanged`. We verified that the note ID and count stayed the same and that its text matched the file.
