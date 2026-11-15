@@ -1,3 +1,5 @@
 # Project continuity
 
-Start with these instructions and any handoff the user provides, then read PROJECT_CONTEXT.md and relevant project files. Query NotebookLM only for missing facts or when explicitly requested. Use the notebooklm-project-handoff skill for a requested push, merge, or handoff. Update the relevant project documentation for a push or merge. Publish updates to the existing configured NotebookLM note or Google Doc.
+Start with the handoff the user supplied. If it answers the question, answer directly. For missing facts, check PROJECT_CONTEXT.md, the relevant README or docs sections, and targeted code as needed. Stop when the available evidence answers the question.
+
+Load the notebooklm-project-handoff skill only for a material fact still missing after these checks, or to maintain and publish the summary for a requested push, merge, or new handoff. Reading a supplied handoff is part of answering the user's question.

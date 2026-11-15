@@ -55,3 +55,23 @@ python3 .agents/skills/notebooklm-project-handoff/scripts/publish.py
 A changed summary prints `Published` with its hash. Repeating the command prints `Unchanged` with that hash. Open the existing NotebookLM source to verify the changed paragraph. For Google Docs, reopen the notebook or use its Drive sync control if the source is stale. Make editorial changes in the Markdown file.
 
 The publisher can be run from a local scheduler if you want updates outside Codex. NotebookLM lookup is optional and requires a signed-in browser or a separately configured query connector available to the chat.
+
+## Token benchmark
+
+We ran three questions twice per workflow on the same project snapshot with Codex CLI 0.169.0-alpha.11.1 and `gpt-6.1-sol` at low reasoning effort. Both variants in a pair received the same files, handoff, and question. The skill variant also had the skill, its example project instructions, and a configured NotebookLM note. When a chat asked for a missing fact, it received a scripted reply and that extra turn counted. All final answers contained both expected facts.
+
+| Where the requested facts were available | Total tokens without skill | Total tokens with skill | Change | NotebookLM requests with skill |
+| --- | ---: | ---: | ---: | ---: |
+| Complete handoff and local files | 284,481 | 319,087 | +12.2% | 0 |
+| Relevant facts in README | 343,665 | 334,922 | −2.5% | 0 |
+| Missing fact only in NotebookLM | 955,655 | 865,354 | −9.4% | 7 |
+
+Totals combine reported Codex input and output across six runs per variant. Uncached input increased from 34,165 to 42,690 with a complete handoff and from 45,290 to 48,957 when README was sufficient. It decreased from 181,820 to 64,274 when NotebookLM was needed. In that last scenario, the skill answered without asking the user in all six runs. The control asked six times.
+
+In a separate README run, a section labeled as test data caused two NotebookLM checks. Total tokens rose from 411,002 to 537,007 (+30.7%). In the table above, both workflows were explicitly told that README contained confirmed conditions for the exercise. The samples are small, caching was left enabled, and we did not measure billing or NotebookLM's internal token use.
+
+### Update and attachment checks
+
+A new chat updated the local summary and published it to one existing NotebookLM note. A second chat received the same request and got `Unchanged`. We verified that the note ID and count stayed the same and that its text matched the file.
+
+A fresh chat identified the board, chip, and sensor model and count from the saved project summary without photos. This confirms that the text is sufficient for those questions. We did not run a paired benchmark with the original photos or measure image recognition tokens.
