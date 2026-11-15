@@ -62,6 +62,8 @@ python3 .agents/skills/notebooklm-project-handoff/scripts/lookup.py --function l
 
 Pass explicit Python files. If the name is ambiguous or the definition exceeds 100 lines or 8,000 source characters, use a narrower file selection or a line search.
 
+Use `--deps` to also show direct same-file helpers and uppercase module assignments referenced in the function body. The lookup uses Python AST and lexical scope information. It includes up to four dependencies with a shared budget of 100 lines and 8,000 source characters.
+
 ## Push, merge, and handoff
 
 - **Handoff:** capture new facts, decisions, and open work in the existing summary, publish it, and give the user a short continuation brief.
@@ -101,16 +103,16 @@ Five questions (four Python, one C), two fresh sessions per question and version
 
 On the Python questions alone, repeat reads fell from **8 to 5** and total tokens fell from **392,304 to 343,527 (−12.4%)**. AST was used in seven calls and was never used on the C question. Across all questions, total tokens fell **16.6%** and uncached input rose **27.1%**. These are small-sample measurements with normal caching and independently chosen tool calls.
 
-### Batch Python definitions and constants
+### Include direct Python dependencies
 
-The example `AGENTS.md` groups AST definitions and a bounded search for constant assignments into one shell call when both are needed. In eight matched runs per version across the same four Python questions, both versions answered 8/8 correctly. The skill and lookup script were identical. Initial background and tool schemas matched within each scored pair, and usage was traced per model request.
+Four Python questions, two fresh sessions per question and version, with identical first-request background and tool schemas within each pair after normalizing paths. Usage was traced per model request.
 
-| Python lookup instructions | Repeat reads | Model requests | Total tokens | Uncached input tokens |
-| --- | ---: | ---: | ---: | ---: |
-| Existing AST instructions | 8 | 24 | 405,783 | 36,711 |
-| With a batching example | 7 | 23 | 389,111 | 41,704 |
+| Python lookup instructions | Correct answers | Repeat reads | Model requests | Total tokens | Uncached input tokens |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Manual batching | 7/8 | 7 | 23 | 378,618 | 37,395 |
+| With `--deps` | 8/8 | 4 | 20 | 329,450 | 38,055 |
 
-Total tokens fell **4.1%** and uncached input rose **13.6%** in this sample. The new example added 54 tokens to the first request. Both versions sometimes batched reads without a second model request.
+Total tokens fell **13.0%** and uncached input rose **1.8%** in this sample. Both runs of the question about merging soil-reading histories avoided the separate helper read. In one run of the diagnostics question, the candidate made an extra request and read a broader excerpt. The manual-batching answer in that pair omitted the requested encoding.
 
 ### Earlier bounded lookup benchmark
 

@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import re
 import subprocess
+import symtable
 import sys
 import uuid
 
@@ -71,25 +72,100 @@ def snippets(sources, matcher, limit, context):
             yield f"{str(label)[:240]}:{near}: {excerpt}"
 
 
-def function_sources(sources, names):
+def module_definitions(tree):
+    definitions = {}
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            names = [node.name]
+        else:
+            targets = node.targets if isinstance(node, ast.Assign) else (
+                [node.target] if isinstance(node, ast.AnnAssign) else []
+            )
+            names = {target.id for target in targets if isinstance(target, ast.Name)}
+        for name in names:
+            definitions.setdefault(name, []).append(node)
+    return definitions
+
+
+def function_scopes(table):
+    for child in table.get_children():
+        if child.get_type() == "function":
+            yield (child.get_name(), child.get_lineno()), child
+        yield from function_scopes(child)
+
+
+def dependency_nodes(node, scopes, definitions):
+    scope = scopes.get((node.name, node.lineno))
+    if scope is None:
+        return
+    globals_used = {symbol.get_name() for symbol in scope.get_symbols()
+                    if symbol.is_global() and symbol.is_referenced()}
+    for name in sorted(globals_used):
+        candidates = definitions.get(name, ())
+        if len(candidates) != 1 or candidates[0] is node:
+            continue
+        candidate = candidates[0]
+        if isinstance(candidate, (ast.FunctionDef, ast.AsyncFunctionDef)) or (
+            name.isupper() and isinstance(candidate, (ast.Assign, ast.AnnAssign))
+            and candidate.value is not None
+        ):
+            yield candidate
+
+
+def first_line(node):
+    return min([node.lineno, *(decorator.lineno for decorator in getattr(node, "decorator_list", ()))])
+
+
+def function_sources(sources, names, include_dependencies=False):
     matches = {name: [] for name in names}
+    modules = {}
     for label, content in sources:
         tree = ast.parse(content, filename=str(label))
         lines = content.splitlines()
+        if include_dependencies:
+            modules[label] = (
+                dict(function_scopes(symtable.symtable(content, str(label), "exec"))),
+                module_definitions(tree),
+            )
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in matches:
-                start = min([node.lineno, *(decorator.lineno for decorator in node.decorator_list)])
-                matches[node.name].append((label, start, node.end_lineno, lines[start - 1:node.end_lineno]))
+                matches[node.name].append((label, node, lines))
+    selected = set()
+    dependencies = {}
     for name, definitions in matches.items():
         if len(definitions) != 1:
             count = len(definitions)
             yield f"{name}: {count} definitions. Use narrower files or a line search."
             continue
-        label, start, end, lines = definitions[0]
-        if len(lines) > 100 or sum(map(len, lines)) > 8000:
+        label, node, lines = definitions[0]
+        start, end = first_line(node), node.end_lineno
+        snippet = lines[start - 1:end]
+        if len(snippet) > 100 or sum(map(len, snippet)) > 8000:
             yield f"{label}:{start}-{end}: {name} exceeds the function excerpt limit. Use a line search."
             continue
-        for number, line in enumerate(lines, start):
+        selected.add((label, start, end))
+        for number, line in enumerate(snippet, start):
+            yield f"{label}:{number}: {line}"
+        if include_dependencies:
+            for dependency in dependency_nodes(node, *modules[label]):
+                span = (label, first_line(dependency), dependency.end_lineno)
+                dependencies[span] = lines
+
+    remaining_lines = 100
+    remaining_chars = 8000
+    count = 0
+    for (label, start, end), lines in sorted(dependencies.items()):
+        if (label, start, end) in selected:
+            continue
+        snippet = lines[start - 1:end]
+        size = sum(map(len, snippet))
+        if count >= 4 or len(snippet) > remaining_lines or size > remaining_chars:
+            yield f"{label}:{start}-{end}: dependency omitted by excerpt limit"
+            continue
+        count += 1
+        remaining_lines -= len(snippet)
+        remaining_chars -= size
+        for number, line in enumerate(snippet, start):
             yield f"{label}:{number}: {line}"
 
 
@@ -99,6 +175,7 @@ def main():
     parser.add_argument("--also", action="append", default=[], metavar="PATTERN", help="additional fact to search for independently")
     parser.add_argument("files", nargs="*", help="local files, defaults to the summary and README")
     parser.add_argument("--function", action="store_true", help="return complete Python definitions by exact name")
+    parser.add_argument("--deps", action="store_true", help="include bounded direct dependencies from the same Python file (requires --function)")
     parser.add_argument("--note", action="store_true", help="search the configured NotebookLM note")
     parser.add_argument("--limit", type=int, choices=range(1, 11), default=3, help="matches per fact")
     parser.add_argument("--context", type=int, choices=range(7), default=0, help="adjacent lines on each side (0–6)")
@@ -106,6 +183,8 @@ def main():
     args = parser.parse_intermixed_args()
     if args.note and args.files:
         parser.error("--note does not take local files")
+    if args.deps and not args.function:
+        parser.error("--deps requires --function")
     root = args.project.resolve()
     try:
         patterns = [args.pattern, *args.also]
@@ -116,7 +195,7 @@ def main():
                 parser.error("--function requires explicit Python files and cannot be combined with --note or --context")
             if not all(name.isidentifier() for name in patterns):
                 parser.error("--function requires exact Python names")
-            print("\n".join(function_sources(local_sources(root, args.files), patterns)))
+            print("\n".join(function_sources(local_sources(root, args.files), patterns, args.deps)))
             return
         matchers = [re.compile(pattern, re.IGNORECASE) for pattern in patterns]
         sources = [note_source(root)] if args.note else local_sources(root, args.files)
