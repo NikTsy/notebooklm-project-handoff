@@ -101,6 +101,17 @@ Five questions (four Python, one C), two fresh sessions per question and version
 
 On the Python questions alone, repeat reads fell from **8 to 5** and total tokens fell from **392,304 to 343,527 (−12.4%)**. AST was used in seven calls and was never used on the C question. Across all questions, total tokens fell **16.6%** and uncached input rose **27.1%**. These are small-sample measurements with normal caching and independently chosen tool calls.
 
+### Batch Python definitions and constants
+
+The example `AGENTS.md` groups AST definitions and a bounded search for constant assignments into one shell call when both are needed. In eight matched runs per version across the same four Python questions, both versions answered 8/8 correctly. The skill and lookup script were identical. Initial background and tool schemas matched within each scored pair, and usage was traced per model request.
+
+| Python lookup instructions | Repeat reads | Model requests | Total tokens | Uncached input tokens |
+| --- | ---: | ---: | ---: | ---: |
+| Existing AST instructions | 8 | 24 | 405,783 | 36,711 |
+| With a batching example | 7 | 23 | 389,111 | 41,704 |
+
+Total tokens fell **4.1%** and uncached input rose **13.6%** in this sample. The new example added 54 tokens to the first request. Both versions sometimes batched reads without a second model request.
+
 ### Earlier bounded lookup benchmark
 
 **28.4% fewer total Codex tokens, with 18/18 correct answers in both versions.** Both groups used the skill. We reused the same three questions, two repetitions per scenario, project snapshot, and NotebookLM note.
