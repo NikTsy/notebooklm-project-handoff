@@ -88,7 +88,11 @@ The median **paired** difference was **+92.5 tokens**. The aggregate rose by **7
 | −1,447, +1,225, or +1,226 | 3 | +1,004 |
 | +2,786 or +2,787 | 2 | +5,573 |
 
-The last two pairs explain 77% of the net increase. The final answers and output token counts matched in every pair. The JSONL logs show the reported input counts and cache hits. They do not expose enough of the model-visible request to identify what accounted for the two largest differences. The separate prompt inspection confirms the skill catalog entry, while this sample does not establish a fixed overhead per chat.
+The last two pairs explain 77% of the net increase. Final answers and output token counts matched in every pair. The first run recorded usage but did not capture the model request payloads.
+
+**Repeat with request tracing.** Another 12 pairs all answered correctly and made zero tool calls. Codex's rollout trace captured one request per run. In the nine pairs with the same background skill catalog, installing this skill added **89–90 input tokens**. In two installed runs and one control run, Codex injected a catalog with **33 additional environment skills**. Comparing the same question and installation state, the expanded catalog corresponded to **2,694 extra input tokens**. This reproduces the size of the earlier outliers alongside the small difference associated with this skill's listing. The original payloads are unavailable, so their exact contents cannot be confirmed.
+
+The traced repeat totaled 192,222 tokens without the skill and 195,988 with it (+2.0%). Catalog changes occurred in both variants. Treat the aggregate as observed session usage and the matched-catalog comparison as the closer estimate of the listing's overhead in this setup.
 
 ### When the chat has to find facts
 
@@ -117,13 +121,12 @@ A new chat updated the local summary and published it to one existing NotebookLM
 
 Four fresh chats per mode answered the same question about the board, chip, and soil sensor model. We used public reference photos of the **same models used in the project**, since the original project photos were unavailable. The images were 2398 × 2398 and 512 × 512. Model and settings matched the benchmark above. Web lookup and NotebookLM were excluded. [MuseLab board photo](https://github.com/wuxx/nanoESP32-C6/blob/master/README_en.md) · [Zigbee2MQTT sensor photo](https://www.zigbee2mqtt.io/devices/ZG-303Z.html)
 
-**When the hardware is already identified, carry forward the model names in the handoff.** In the matched comparison, reattaching the two photos added **5,791 tokens (+33.7%)** and both modes got all four answers right.
+**Keep confirmed model names in the handoff.** In the matched test, dropping the two photos cut median total tokens by **25.2%** with the same text, question, and accuracy.
 
-| What the new chat received | Median total tokens | Extra vs. short text | Complete identification |
-| --- | ---: | ---: | ---: |
-| **Short text handoff** | **17,193** | Baseline | **4/4** |
-| Same text plus both photos | 22,984 | **+5,791 (+33.7%)** | 4/4 |
-| Both photos alone | 23,029 | +5,836 (+33.9%) | **0/4** |
-| Same facts read from `PROJECT_CONTEXT.md` | 31,817 | +14,624 (+85.1%) | 4/4 |
+| Switch to a short text handoff | Median tokens before | Median tokens after | Change | Complete identifications before → after |
+| --- | ---: | ---: | ---: | ---: |
+| Drop the photos from the same text handoff | 22,984 | 17,193 | **−25.2%** | 4/4 → 4/4 |
+| Replace photos alone with confirmed facts | 23,029 | 17,193 | −25.3% | 0/4 → 4/4 |
+| Include facts from `PROJECT_CONTEXT.md` directly in the handoff | 31,817 | 17,193 | −46.0% | 4/4 → 4/4 |
 
-With photos alone, all four chats identified the chip and left the exact board and sensor models unknown. Reading the local file required an extra tool call and cost more than receiving the short text in this setup. The totals include cached input and depend on the images, model, and tool calls.
+With photos alone, all four chats identified the chip and left the exact board and sensor models unknown. Reading the local file required an extra tool call and cost more than receiving the short text in this setup. The first row compares the same facts with and without photos. The other rows compare different ways of supplying evidence. Totals include cached input and depend on the images, model, and tool calls.
