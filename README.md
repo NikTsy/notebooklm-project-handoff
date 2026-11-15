@@ -64,6 +64,14 @@ Pass explicit Python files. If the name is ambiguous or the definition exceeds 1
 
 Use `--deps` to also show direct same-file helpers and uppercase module assignments referenced in the function body. The lookup uses Python AST and lexical scope information. It includes up to four dependencies with a shared budget of 100 lines and 8,000 source characters.
 
+When the question explicitly names a URL path, use `--route` with a named Python handler:
+
+```sh
+python3 .agents/skills/notebooklm-project-handoff/scripts/lookup.py --function do_GET server.py --route /api/status
+```
+
+This mode selects one top-level `if` or `elif` branch using a literal path equality or prefix check. It shows the branch, shared handler code, and bounded direct dependencies from the same file. If there is no unique match, the tool suggests a line search.
+
 ## Push, merge, and handoff
 
 - **Handoff:** capture new facts, decisions, and open work in the existing summary, publish it, and give the user a short continuation brief.
@@ -113,6 +121,17 @@ Four Python questions, two fresh sessions per question and version, with identic
 | With `--deps` | 8/8 | 4 | 20 | 329,450 | 38,055 |
 
 Total tokens fell **13.0%** and uncached input rose **1.8%** in this sample. Both runs of the question about merging soil-reading histories avoided the separate helper read. In one run of the diagnostics question, the candidate made an extra request and read a broader excerpt. The manual-batching answer in that pair omitted the requested encoding.
+
+### Read a route branch by explicit URL path
+
+Four Python questions, two matched runs per question and version. Five pairs with different initial background were rerun. Both versions answered 8/8 correctly. Token usage was traced per model request.
+
+| Version | Repeat reads | Model requests | Total tokens | Uncached input tokens |
+| --- | ---: | ---: | ---: | ---: |
+| Function lookup with dependencies | 4 | 20 | 324,566 | 49,807 |
+| Route selection for explicit paths | 2 | 18 | 296,150 | 42,727 |
+
+Total tokens fell **8.8%** overall and **25.9%** on the endpoint questions alone. All four route calls matched paths from the question. One ordinary-function run still required an extra read. The uncached totals were influenced by a 12,032-token first-request cache difference in one pair.
 
 ### Earlier bounded lookup benchmark
 

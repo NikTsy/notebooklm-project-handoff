@@ -94,12 +94,17 @@ def function_scopes(table):
         yield from function_scopes(child)
 
 
-def dependency_nodes(node, scopes, definitions):
+def dependency_nodes(node, scopes, definitions, route_nodes=None):
     scope = scopes.get((node.name, node.lineno))
     if scope is None:
         return
     globals_used = {symbol.get_name() for symbol in scope.get_symbols()
                     if symbol.is_global() and symbol.is_referenced()}
+    if route_nodes is not None:
+        globals_used.intersection_update(
+            item.id for statement in route_nodes for item in ast.walk(statement)
+            if isinstance(item, ast.Name) and isinstance(item.ctx, ast.Load)
+        )
     for name in sorted(globals_used):
         candidates = definitions.get(name, ())
         if len(candidates) != 1 or candidates[0] is node:
@@ -116,7 +121,38 @@ def first_line(node):
     return min([node.lineno, *(decorator.lineno for decorator in getattr(node, "decorator_list", ()))])
 
 
-def function_sources(sources, names, include_dependencies=False):
+def route_matches(test, route):
+    if isinstance(test, ast.Compare) and len(test.ops) == 1 and isinstance(test.ops[0], ast.Eq):
+        path, value = test.left, test.comparators[0]
+        matches = isinstance(value, ast.Constant) and value.value == route
+    elif (isinstance(test, ast.Call) and isinstance(test.func, ast.Attribute)
+          and test.func.attr == "startswith" and len(test.args) == 1 and not test.keywords):
+        path, value = test.func.value, test.args[0]
+        matches = isinstance(value, ast.Constant) and isinstance(value.value, str) and route.startswith(value.value)
+    else:
+        return False
+    return matches and isinstance(path, ast.Attribute) and path.attr == "path"
+
+
+def route_branch(node, route):
+    matches = []
+    for index, statement in enumerate(node.body):
+        if not isinstance(statement, ast.If):
+            continue
+        branch = statement
+        while True:
+            if route_matches(branch.test, route):
+                matches.append((index, branch))
+            if len(branch.orelse) != 1 or not isinstance(branch.orelse[0], ast.If):
+                break
+            next_branch = branch.orelse[0]
+            if next_branch.col_offset != branch.col_offset:
+                break
+            branch = next_branch
+    return matches
+
+
+def function_sources(sources, names, include_dependencies=False, route=None):
     matches = {name: [] for name in names}
     modules = {}
     for label, content in sources:
@@ -139,15 +175,30 @@ def function_sources(sources, names, include_dependencies=False):
             continue
         label, node, lines = definitions[0]
         start, end = first_line(node), node.end_lineno
-        snippet = lines[start - 1:end]
+        route_nodes = None
+        line_numbers = range(start, end + 1)
+        if route is not None:
+            branches = route_branch(node, route)
+            if len(branches) != 1:
+                yield f"{label}:{start}: {len(branches)} matching branches for {route}. Use a line search."
+                continue
+            index, branch = branches[0]
+            dispatcher = node.body[index]
+            line_numbers = [
+                *range(start, dispatcher.lineno),
+                *range(branch.lineno, branch.body[-1].end_lineno + 1),
+                *range(dispatcher.end_lineno + 1, end + 1),
+            ]
+            route_nodes = [*node.body[:index], branch.test, *branch.body, *node.body[index + 1:]]
+        snippet = [lines[number - 1] for number in line_numbers]
         if len(snippet) > 100 or sum(map(len, snippet)) > 8000:
             yield f"{label}:{start}-{end}: {name} exceeds the function excerpt limit. Use a line search."
             continue
         selected.add((label, start, end))
-        for number, line in enumerate(snippet, start):
+        for number, line in zip(line_numbers, snippet):
             yield f"{label}:{number}: {line}"
         if include_dependencies:
-            for dependency in dependency_nodes(node, *modules[label]):
+            for dependency in dependency_nodes(node, *modules[label], route_nodes):
                 span = (label, first_line(dependency), dependency.end_lineno)
                 dependencies[span] = lines
 
@@ -176,6 +227,7 @@ def main():
     parser.add_argument("files", nargs="*", help="local files, defaults to the summary and README")
     parser.add_argument("--function", action="store_true", help="return complete Python definitions by exact name")
     parser.add_argument("--deps", action="store_true", help="include bounded direct dependencies from the same Python file (requires --function)")
+    parser.add_argument("--route", help="read one literal path branch and its direct local dependencies (requires --function)")
     parser.add_argument("--note", action="store_true", help="search the configured NotebookLM note")
     parser.add_argument("--limit", type=int, choices=range(1, 11), default=3, help="matches per fact")
     parser.add_argument("--context", type=int, choices=range(7), default=0, help="adjacent lines on each side (0–6)")
@@ -185,6 +237,8 @@ def main():
         parser.error("--note does not take local files")
     if args.deps and not args.function:
         parser.error("--deps requires --function")
+    if args.route is not None and (not args.function or args.also or not args.route.startswith("/")):
+        parser.error("--route requires one Python function name and a path starting with /")
     root = args.project.resolve()
     try:
         patterns = [args.pattern, *args.also]
@@ -195,7 +249,7 @@ def main():
                 parser.error("--function requires explicit Python files and cannot be combined with --note or --context")
             if not all(name.isidentifier() for name in patterns):
                 parser.error("--function requires exact Python names")
-            print("\n".join(function_sources(local_sources(root, args.files), patterns, args.deps)))
+            print("\n".join(function_sources(local_sources(root, args.files), patterns, args.deps or args.route is not None, args.route)))
             return
         matchers = [re.compile(pattern, re.IGNORECASE) for pattern in patterns]
         sources = [note_source(root)] if args.note else local_sources(root, args.files)
