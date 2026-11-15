@@ -54,6 +54,14 @@ python3 .agents/skills/notebooklm-project-handoff/scripts/lookup.py 'gateway|sen
 
 The helper returns three short matches per fact by default from the local summary and README. Use `--also PATTERN` for independent facts in the same call, up to four in total. Pass specific files to inspect code or other docs. Add `--context 1` when a match needs nearby lines. The radius can be raised to six lines on each side, and overlapping snippets for the same fact show each line once. Add `--note` only when the fact is still missing locally and a NotebookLM note is configured. That mode fetches the note by ID and filters the text before returning it to the chat.
 
+For a named Python function or method, use its exact name to get the complete definition with line numbers, including decorators:
+
+```sh
+python3 .agents/skills/notebooklm-project-handoff/scripts/lookup.py --function load_config app.py --also validate_config
+```
+
+Pass explicit Python files. If the name is ambiguous or the definition exceeds 100 lines or 8,000 source characters, use a narrower file selection or a line search.
+
 ## Push, merge, and handoff
 
 - **Handoff:** capture new facts, decisions, and open work in the existing summary, publish it, and give the user a short continuation brief.
@@ -77,22 +85,21 @@ The publisher can be run from a local scheduler if you want updates outside Code
 | If you… | What we measured | Practical effect |
 | --- | --- | --- |
 | Start with a **complete handoff** | **+89–90 input tokens** in pairs with the same skill catalog | Zero tool calls in either group |
-| Look up **implementation details in code** | **9.4% fewer total tokens** with combined lookup than with the previous release | 10/10 correct in each version and zero NotebookLM calls |
+| Look up **implementation details in Python** | **12.4% fewer total tokens** with the AST option available | 8/8 correct in each version and 8 → 5 repeat reads |
 | **Drop two repeat photos** from the same text handoff | **25.2% fewer total tokens** | Same accuracy: 4/4 complete answers |
 
 These measurements use Codex CLI 0.169.0-alpha.11.1 and `gpt-6.1-sol` at low reasoning effort. Total tokens are reported Codex input plus output, including cached input. The tables show small samples with normal caching. They do not estimate billing or NotebookLM's internal token use.
 
 ### Questions about code
 
-Five questions about implementation, two fresh runs per question and version, using the same code snapshot. Each answer was checked against the relevant code. All requested facts were available locally.
+Five questions (four Python, one C), two fresh sessions per question and version, using the same code snapshot. The first-request background and tool catalog matched within each scored pair after normalizing workspace paths. Four pairs with different background context were rerun. Usage was recorded for every model request.
 
-| Skill version | Correct answers | Total tokens | Change vs. previous release | Uncached input tokens |
-| --- | ---: | ---: | ---: | ---: |
-| Previous release | 10/10 | 490,344 | — | 47,398 |
-| Adaptive lookup only | 10/10 | 585,733 | +19.5% | 55,005 |
-| **Combined lookup** | **10/10** | **444,355** | **−9.4%** | **49,587** |
+| Version | Correct answers | Model requests | Repeat code reads | Total tokens | Uncached input tokens |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Bounded line search | 10/10 | 30 | 10 | 491,709 | 46,223 |
+| Bounded line search + Python AST | 10/10 | 25 | 5 | 409,920 | 58,756 |
 
-Combined lookup batches distinct facts, uses small excerpts by default, and loads maintenance instructions on demand. It used 24.1% fewer total tokens than adaptive lookup alone. Against the previous release, it reduced shell calls from 20 to 17 and used 4.6% more uncached input tokens. None of the runs queried NotebookLM.
+On the Python questions alone, repeat reads fell from **8 to 5** and total tokens fell from **392,304 to 343,527 (−12.4%)**. AST was used in seven calls and was never used on the C question. Across all questions, total tokens fell **16.6%** and uncached input rose **27.1%**. These are small-sample measurements with normal caching and independently chosen tool calls.
 
 ### Earlier bounded lookup benchmark
 

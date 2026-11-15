@@ -2,6 +2,7 @@
 """Show short, source-labeled matches from local files or the configured note."""
 
 import argparse
+import ast
 from collections import Counter
 import json
 from pathlib import Path
@@ -70,11 +71,34 @@ def snippets(sources, matcher, limit, context):
             yield f"{str(label)[:240]}:{near}: {excerpt}"
 
 
+def function_sources(sources, names):
+    matches = {name: [] for name in names}
+    for label, content in sources:
+        tree = ast.parse(content, filename=str(label))
+        lines = content.splitlines()
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in matches:
+                start = min([node.lineno, *(decorator.lineno for decorator in node.decorator_list)])
+                matches[node.name].append((label, start, node.end_lineno, lines[start - 1:node.end_lineno]))
+    for name, definitions in matches.items():
+        if len(definitions) != 1:
+            count = len(definitions)
+            yield f"{name}: {count} definitions. Use narrower files or a line search."
+            continue
+        label, start, end, lines = definitions[0]
+        if len(lines) > 100 or sum(map(len, lines)) > 8000:
+            yield f"{label}:{start}-{end}: {name} exceeds the function excerpt limit. Use a line search."
+            continue
+        for number, line in enumerate(lines, start):
+            yield f"{label}:{number}: {line}"
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("pattern", help="case-insensitive regular expression")
     parser.add_argument("--also", action="append", default=[], metavar="PATTERN", help="additional fact to search for independently")
     parser.add_argument("files", nargs="*", help="local files, defaults to the summary and README")
+    parser.add_argument("--function", action="store_true", help="return complete Python definitions by exact name")
     parser.add_argument("--note", action="store_true", help="search the configured NotebookLM note")
     parser.add_argument("--limit", type=int, choices=range(1, 11), default=3, help="matches per fact")
     parser.add_argument("--context", type=int, choices=range(7), default=0, help="adjacent lines on each side (0–6)")
@@ -87,6 +111,13 @@ def main():
         patterns = [args.pattern, *args.also]
         if len(patterns) > 4:
             parser.error("request at most four facts")
+        if args.function:
+            if args.note or args.context or not args.files or any(Path(file).suffix != ".py" for file in args.files):
+                parser.error("--function requires explicit Python files and cannot be combined with --note or --context")
+            if not all(name.isidentifier() for name in patterns):
+                parser.error("--function requires exact Python names")
+            print("\n".join(function_sources(local_sources(root, args.files), patterns)))
+            return
         matchers = [re.compile(pattern, re.IGNORECASE) for pattern in patterns]
         sources = [note_source(root)] if args.note else local_sources(root, args.files)
         sources = list(sources)
@@ -94,7 +125,7 @@ def main():
             if args.also:
                 print(f"Pattern: {pattern}")
             print("\n".join(snippets(sources, matcher, args.limit, args.context)) or "No matches. Try a synonym or inspect the relevant source.")
-    except (OSError, ValueError, KeyError, re.error, subprocess.SubprocessError) as exc:
+    except (OSError, ValueError, KeyError, SyntaxError, re.error, subprocess.SubprocessError) as exc:
         parser.exit(1, f"Lookup failed ({type(exc).__name__}). Check the files, pattern, or NotebookLM configuration and authentication.\n")
 
 
