@@ -4,6 +4,17 @@ A Codex skill that helps new chats pick up a project from its handoff and local 
 
 **[Quick start](#quick-start)** · **[Install with an agent](#install-with-an-agent)** · **[Connect NotebookLM](docs/notebooklm-setup.md)** · **[Benchmarks](docs/benchmarks.md)**
 
+## Try it without a Google account
+
+From a clone of this repository, run a lookup against the included example summary:
+
+```sh
+python3 .agents/skills/notebooklm-project-handoff/scripts/lookup.py \
+  --project examples 'queued jobs' --also 'idempotency'
+```
+
+The command returns two source-labeled excerpts in one call. In your own project, Codex starts with the handoff and local evidence, then uses NotebookLM only for facts it still needs.
+
 ## Quick start
 
 **Requires Git and Python 3.10+.** Run from the root of the project you want to set up.
