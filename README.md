@@ -38,6 +38,14 @@ Each publish replaces the body of that note and reads it back before saving the 
 }
 ```
 
+## Starting a new chat
+
+- **Complete handoff:** answer from the confirmed facts in the handoff. Open local files only for facts still needed.
+- **Partial, vague, or stale handoff:** use it to understand the goal and next step. For consequential facts, consult `PROJECT_CONTEXT.md`, the relevant README or documentation sections, and the current code or Git history where needed.
+- **No handoff:** start from the user's request and `AGENTS.md`. Use `PROJECT_CONTEXT.md` for a short overview, or go straight to README and relevant files if a summary is absent.
+
+Query NotebookLM only when a material fact is still missing. If the goal or next step remains unclear after checking the available context, ask a focused question. The token benchmark below includes a handoff with a missing fact. It does not measure a stale or absent handoff separately.
+
 ## Push, merge, and handoff
 
 - **Handoff:** capture new facts, decisions, and open work in the existing summary, publish it, and give the user a short continuation brief.
@@ -70,8 +78,19 @@ Totals combine reported Codex input and output across six runs per variant. Unca
 
 In a separate README run, a section labeled as test data caused two NotebookLM checks. Total tokens rose from 411,002 to 537,007 (+30.7%). In the table above, both workflows were explicitly told that README contained confirmed conditions for the exercise. The samples are small, caching was left enabled, and we did not measure billing or NotebookLM's internal token use.
 
-### Update and attachment checks
+### Summary update check
 
 A new chat updated the local summary and published it to one existing NotebookLM note. A second chat received the same request and got `Unchanged`. We verified that the note ID and count stayed the same and that its text matched the file.
 
-A fresh chat identified the board, chip, and sensor model and count from the saved project summary without photos. This confirms that the text is sufficient for those questions. We did not run a paired benchmark with the original photos or measure image recognition tokens.
+### Photo benchmark
+
+Four fresh chats per mode answered the same question about the board, chip, and soil sensor model. We used public reference photos of the **same models used in the project**, since the original project photos were unavailable. The images were 2398 × 2398 and 512 × 512. Model and settings matched the benchmark above. Web lookup and NotebookLM were excluded. [MuseLab board photo](https://github.com/wuxx/nanoESP32-C6/blob/master/README_en.md) · [Zigbee2MQTT sensor photo](https://www.zigbee2mqtt.io/devices/ZG-303Z.html)
+
+| Input | Median total Codex tokens | All three identifications correct |
+| --- | ---: | ---: |
+| Two photos only | 23,029 | 0/4 |
+| Short text handoff | 17,193 | 4/4 |
+| Same text handoff plus two photos | 22,984 | 4/4 |
+| Read the same facts from local `PROJECT_CONTEXT.md` | 31,817 | 4/4 |
+
+All photo-only runs identified the chip, while the exact board and sensor models remained unresolved. With the same confirmed text in both arms, the photos added 5,791 total tokens by median. The text-only handoff used 25.2% fewer tokens than the text plus photos. **Reading the local file cost more than receiving the short text in the handoff** in this setup. The file mode included a tool call to fetch the facts. Counts include input and output tokens, including cached input, and depend on the images, model, and tool calls.
