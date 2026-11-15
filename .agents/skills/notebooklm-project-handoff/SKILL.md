@@ -7,6 +7,6 @@ Read the supplied handoff and targeted local files first. When those answer the 
 
 Use `--also` to request separate facts in one call. Default to three matches per fact and add `--context 1` only when necessary. The supported radius is 0–6 lines. For Python behavior use `lookup.py --function NAME file.py` to read a complete definition, optionally with `--also NAME`. Add `--deps` for direct helpers and constants in the same file. Only when the question explicitly names a URL path, use `--function do_GET file.py --route /path` to read one route branch and its direct dependencies.
 
-If the fact is still missing, run the same script with `--note`. The script uses the configured note ID. For a notebook-only configuration ask a focused question by explicit notebook ID. Cite the source, and report access failures. Ask the user only for a consequential unresolved fact.
+If the fact is still missing, use `lookup.py --note` only with a configured NotebookLM note. For a Google Doc or notebook, use an available connector or signed-in browser, or query by explicit notebook ID with the signed-in CLI. Cite the source, and report access failures. Ask the user only for a consequential unresolved fact.
 
 For a requested push, merge, or new handoff, read [the maintenance workflow](references/maintenance.md).
