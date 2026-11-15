@@ -77,7 +77,6 @@ The publisher can be run from a local scheduler if you want updates outside Code
 | If you… | What we measured | Practical effect |
 | --- | --- | --- |
 | Start with a **complete handoff** | **+89–90 input tokens** in pairs with the same skill catalog | Zero tool calls in either group |
-| Start with a **weak, stale, or missing handoff** | **11–20% fewer total tokens** with the skill | User clarifications fell from 4 to 0 in each scenario |
 | Replace the previous skill with **bounded lookup** | **28.4% fewer total tokens** | Same final accuracy: 18/18 in both versions |
 | **Drop two repeat photos** from the same text handoff | **25.2% fewer total tokens** | Same accuracy: 4/4 complete answers |
 
@@ -101,69 +100,24 @@ Commands fell from **93 to 72**, and their output shrank from **334,590 to 105,6
 
 The current version returns short excerpts from local files and configured notes, carries the verified facts needed for the next step into the handoff, and records durable facts that have required repeated lookup. A separate check confirmed that a handoff saved one such fact in the local summary and updated the existing note. A fresh chat then found the fact locally.
 
-The first implementation missed one fact in a long README because common matches filled the result limit. After fixing the ranking, we repeated all 18 current-version runs and retained the earlier-version runs as the comparison. One rerun timed out and was restarted. Its unfinished token usage was unavailable and is excluded. The runs occurred at different times, the caches were left enabled, and the benchmark note was short. This comparison measures the package of changes together.
-
-</details>
-
-### Earlier comparison: skill vs. no skill
-
-**Same final accuracy in every row:** 6/6 with and without the skill. NotebookLM was used only where a fact was missing from the handoff and local files in the confirmed-input scenarios below.
-
-| Starting context | Tokens without skill | Tokens with skill | Change | Clarifications without → with | NotebookLM calls with skill |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Handoff and local files suffice | 284,481 | 319,087 | +12.2% | 0 → 0 | 0 |
-| Confirmed facts in README suffice | 343,665 | 334,922 | −2.5% | 0 → 0 | 0 |
-| A missing fact is only in NotebookLM | 955,655 | 865,354 | −9.4% | 6 → 0 | 7 |
-| Weak handoff | 875,591 | 701,722 | −19.9% | 4 → 0 | 4 |
-| Stale handoff | 863,529 | 745,669 | −13.6% | 4 → 0 | 4 |
-| No handoff | 857,131 | 759,104 | −11.4% | 4 → 0 | 5 |
-
-<details>
-<summary>Setup, exceptions, and what counted</summary>
-
-Each row compares six runs per variant, using three questions and two repetitions on matched project snapshots. The skill variant included the skill, its example `AGENTS.md`, and an authenticated NotebookLM note. A scripted answer was available to both variants if a missing fact led to a clarification. All turns, including the follow-up turns, count. Both variants reached **6/6 correct final answers** in every row.
-
-In the first row, no run opened `SKILL.md` or queried NotebookLM. The installed workflow ran 14 local commands, compared with 10 in the control. The +12.2% is the observed difference between those workflows, with different local reads and tool outputs.
-
-In the three startup scenarios, one question was answerable locally and two needed a fact from the notebook. The six locally answerable runs with the skill made zero NotebookLM calls. The 12 runs with a missing fact read the note, with one additional notebook-list call in the no-handoff scenario. The stale handoff explicitly described a prior run and contained conflicting values. This test did not cover an outdated handoff presented as current.
-
-Uncached input rose in the first two rows, from 34,165 to 42,690 and from 45,290 to 48,957, respectively. In a separate README run, a section labeled as test data prompted two NotebookLM checks, and total tokens rose from 411,002 to 537,007 (+30.7%). The confirmed-README row above uses the same confirmation of the exercise facts in both variants.
+The earlier-version and current-version runs occurred at different times, the caches were left enabled, and the benchmark note was short. One current-version run timed out and was restarted. Its unfinished token usage was unavailable and is excluded. This comparison measures the package of changes together.
 
 </details>
 
 ### Complete handoff, no tool calls
 
-**Zero tool calls, 12/12 correct in each group.** With the same background catalog, installing the skill added **89–90 input tokens** in the traced repeat. The unadjusted totals include variation in the catalog Codex sent with the request.
+**Zero tool calls, 12/12 correct in each group.** With the same background catalog, installing the skill added **89–90 input tokens** across nine matched pairs.
 
-| Runs | Without skill | Skill installed | Change |
+| Traced runs | Without skill | Skill installed | Change |
 | --- | ---: | ---: | ---: |
-| Original 12 pairs | 194,319 | 201,542 | +3.7% |
-| Repeat with request tracing, 12 pairs | 192,222 | 195,988 | +2.0% |
+| All 12 pairs | 192,222 | 195,988 | +2.0% |
 
 <details>
-<summary>Controlled setup, original measurements, and request trace</summary>
+<summary>Setup and catalog variation</summary>
 
-Three questions, four paired repetitions each. Both chats in a pair ran in the same directory with identical `AGENTS.md`, handoff, and output instructions. Every answer was available directly in the handoff. The only setup change was whether the skill folder was installed. The prompt asked for a fixed answer format and prohibited tool use. JSONL logs confirm zero calls of any kind in both groups. A separate prompt inspection confirmed that the installed skill appeared in Codex's skill catalog.
+Three questions, four paired repetitions each. Both chats in a pair ran in the same directory with identical `AGENTS.md`, handoff, and output instructions. Every answer was directly in the handoff. The only setup change was the presence of the skill folder. The prompt prohibited tool use. JSONL confirmed no calls, and rollout traces captured one request per run.
 
-| Metric | Without skill | Skill installed |
-| --- | ---: | ---: |
-| Correct answers | 12/12 | 12/12 |
-| Tool calls | 0 | 0 |
-| Total Codex tokens | 194,319 | 201,542 (+3.7%) |
-| Median total per run | 15,797 | 15,907 |
-| Uncached input tokens | 37,931 | 41,570 |
-
-The median **paired** difference was **+92.5 tokens**. The aggregate rose by **7,223 tokens (+3.7%)**. The increase was concentrated in a few pairs:
-
-| Paired input difference with the skill installed | Pairs | Net tokens |
-| --- | ---: | ---: |
-| +92 or +93 | 7 | +646 |
-| −1,447, +1,225, or +1,226 | 3 | +1,004 |
-| +2,786 or +2,787 | 2 | +5,573 |
-
-The last two pairs explain 77% of the net increase. Final answers and output token counts matched in every pair. The first run recorded usage but did not capture the model request payloads.
-
-**Repeat with request tracing.** Another 12 pairs all answered correctly and made zero tool calls. Codex's rollout trace captured one request per run. In the nine pairs with the same background skill catalog, installing this skill added **89–90 input tokens**. In two installed runs and one control run, Codex injected a catalog with **33 additional environment skills**. Comparing the same question and installation state, the expanded catalog corresponded to **2,694 extra input tokens**. This reproduces the size of the earlier outliers alongside the small difference associated with this skill's listing. The original payloads are unavailable, so their exact contents cannot be confirmed.
+Two installed runs and one control run received an expanded catalog with 33 additional environment skills. That added 2,694 input tokens when comparing the same question and installation state. The aggregate reflects that variation. The nine pairs with the same background catalog give the closer estimate of the listing's overhead in this setup.
 
 </details>
 
