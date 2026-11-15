@@ -80,7 +80,15 @@ Three questions, four paired repetitions each. Both chats in a pair ran in the s
 | Median total per run | 15,797 | 15,907 |
 | Uncached input tokens | 37,931 | 41,570 |
 
-The median **paired** difference was **+92.5 tokens** with the skill installed. Per-pair differences ranged from −1,447 to +2,787, even with identical final answers and no tool calls. The result measures observed session usage with the catalog entry present. It does not establish a fixed overhead per chat.
+The median **paired** difference was **+92.5 tokens**. The aggregate rose by **7,223 tokens (+3.7%)**. The increase was concentrated in a few pairs:
+
+| Paired input difference with the skill installed | Pairs | Net tokens |
+| --- | ---: | ---: |
+| +92 or +93 | 7 | +646 |
+| −1,447, +1,225, or +1,226 | 3 | +1,004 |
+| +2,786 or +2,787 | 2 | +5,573 |
+
+The last two pairs explain 77% of the net increase. The final answers and output token counts matched in every pair. The JSONL logs show the reported input counts and cache hits. They do not expose enough of the model-visible request to identify what accounted for the two largest differences. The separate prompt inspection confirms the skill catalog entry, while this sample does not establish a fixed overhead per chat.
 
 ### When the chat has to find facts
 
@@ -109,11 +117,13 @@ A new chat updated the local summary and published it to one existing NotebookLM
 
 Four fresh chats per mode answered the same question about the board, chip, and soil sensor model. We used public reference photos of the **same models used in the project**, since the original project photos were unavailable. The images were 2398 × 2398 and 512 × 512. Model and settings matched the benchmark above. Web lookup and NotebookLM were excluded. [MuseLab board photo](https://github.com/wuxx/nanoESP32-C6/blob/master/README_en.md) · [Zigbee2MQTT sensor photo](https://www.zigbee2mqtt.io/devices/ZG-303Z.html)
 
-| Input | Median total Codex tokens | All three identifications correct |
-| --- | ---: | ---: |
-| Two photos only | 23,029 | 0/4 |
-| Short text handoff | 17,193 | 4/4 |
-| Same text handoff plus two photos | 22,984 | 4/4 |
-| Read the same facts from local `PROJECT_CONTEXT.md` | 31,817 | 4/4 |
+**When the hardware is already identified, carry forward the model names in the handoff.** In the matched comparison, reattaching the two photos added **5,791 tokens (+33.7%)** and both modes got all four answers right.
 
-All photo-only runs identified the chip, while the exact board and sensor models remained unresolved. With the same confirmed text in both arms, the photos added 5,791 total tokens by median. The text-only handoff used 25.2% fewer tokens than the text plus photos. **Reading the local file cost more than receiving the short text in the handoff** in this setup. The file mode included a tool call to fetch the facts. Counts include input and output tokens, including cached input, and depend on the images, model, and tool calls.
+| What the new chat received | Median total tokens | Extra vs. short text | Complete identification |
+| --- | ---: | ---: | ---: |
+| **Short text handoff** | **17,193** | Baseline | **4/4** |
+| Same text plus both photos | 22,984 | **+5,791 (+33.7%)** | 4/4 |
+| Both photos alone | 23,029 | +5,836 (+33.9%) | **0/4** |
+| Same facts read from `PROJECT_CONTEXT.md` | 31,817 | +14,624 (+85.1%) | 4/4 |
+
+With photos alone, all four chats identified the chip and left the exact board and sensor models unknown. Reading the local file required an extra tool call and cost more than receiving the short text in this setup. The totals include cached input and depend on the images, model, and tool calls.
