@@ -52,7 +52,7 @@ For a missing fact, run one targeted search:
 python3 .agents/skills/notebooklm-project-handoff/scripts/lookup.py 'gateway|sensor'
 ```
 
-The helper returns at most ten short matches from the local summary and README. Pass specific files to inspect code or other docs. Add `--note` only when the fact is still missing locally and a NotebookLM note is configured. That mode fetches the note by ID and filters the text before returning it to the chat.
+The helper returns three short matches per fact by default from the local summary and README. Use `--also PATTERN` for independent facts in the same call, up to four in total. Pass specific files to inspect code or other docs. Add `--context 1` when a match needs nearby lines. The radius can be raised to six lines on each side, and overlapping snippets for the same fact show each line once. Add `--note` only when the fact is still missing locally and a NotebookLM note is configured. That mode fetches the note by ID and filters the text before returning it to the chat.
 
 ## Push, merge, and handoff
 
@@ -77,30 +77,42 @@ The publisher can be run from a local scheduler if you want updates outside Code
 | If you… | What we measured | Practical effect |
 | --- | --- | --- |
 | Start with a **complete handoff** | **+89–90 input tokens** in pairs with the same skill catalog | Zero tool calls in either group |
-| Replace the previous skill with **bounded lookup** | **28.4% fewer total tokens** | Same final accuracy: 18/18 in both versions |
+| Look up **implementation details in code** | **9.4% fewer total tokens** with combined lookup than with the previous release | 10/10 correct in each version and zero NotebookLM calls |
 | **Drop two repeat photos** from the same text handoff | **25.2% fewer total tokens** | Same accuracy: 4/4 complete answers |
 
 These measurements use Codex CLI 0.169.0-alpha.11.1 and `gpt-6.1-sol` at low reasoning effort. Total tokens are reported Codex input plus output, including cached input. The tables show small samples with normal caching. They do not estimate billing or NotebookLM's internal token use.
 
-### Current vs. previous skill: bounded lookup
+### Questions about code
+
+Five questions about implementation, two fresh runs per question and version, using the same code snapshot. Each answer was checked against the relevant code. All requested facts were available locally.
+
+| Skill version | Correct answers | Total tokens | Change vs. previous release | Uncached input tokens |
+| --- | ---: | ---: | ---: | ---: |
+| Previous release | 10/10 | 490,344 | — | 47,398 |
+| Adaptive lookup only | 10/10 | 585,733 | +19.5% | 55,005 |
+| **Combined lookup** | **10/10** | **444,355** | **−9.4%** | **49,587** |
+
+Combined lookup batches distinct facts, uses small excerpts by default, and loads maintenance instructions on demand. It used 24.1% fewer total tokens than adaptive lookup alone. Against the previous release, it reduced shell calls from 20 to 17 and used 4.6% more uncached input tokens. None of the runs queried NotebookLM.
+
+### Earlier bounded lookup benchmark
 
 **28.4% fewer total Codex tokens, with 18/18 correct answers in both versions.** Both groups used the skill. We reused the same three questions, two repetitions per scenario, project snapshot, and NotebookLM note.
 
-| Starting context | Previous skill | Current skill | Change | Correct answers |
+| Starting context | Previous skill | Bounded lookup | Change | Correct answers |
 | --- | ---: | ---: | ---: | ---: |
 | Weak handoff | 701,845 | 559,247 | −20.3% | 6/6 → 6/6 |
 | Stale handoff | 731,721 | 492,748 | −32.7% | 6/6 → 6/6 |
 | No handoff | 721,968 | 490,543 | −32.1% | 6/6 → 6/6 |
 | **Total** | **2,155,534** | **1,542,538** | **−28.4%** | **18/18 → 18/18** |
 
-Commands fell from **93 to 72**, and their output shrank from **334,590 to 105,656 characters**. Both versions read NotebookLM 12 times. In the current version, each of the 12 tasks with a missing fact fetched its configured note once. The six tasks with sufficient local facts made zero NotebookLM requests.
+Commands fell from **93 to 72**, and their output shrank from **334,590 to 105,656 characters**. Both versions read NotebookLM 12 times. In the bounded lookup version, each of the 12 tasks with a missing fact fetched its configured note once. The six tasks with sufficient local facts made zero NotebookLM requests.
 
 <details>
 <summary>What changed and how the comparison was run</summary>
 
-The current version returns short excerpts from local files and configured notes, carries the verified facts needed for the next step into the handoff, and records durable facts that have required repeated lookup. A separate check confirmed that a handoff saved one such fact in the local summary and updated the existing note. A fresh chat then found the fact locally.
+The bounded lookup version returns short excerpts from local files and configured notes, carries the verified facts needed for the next step into the handoff, and records durable facts that have required repeated lookup. A separate check confirmed that a handoff saved one such fact in the local summary and updated the existing note. A fresh chat then found the fact locally.
 
-The earlier-version and current-version runs occurred at different times, the caches were left enabled, and the benchmark note was short. One current-version run timed out and was restarted. Its unfinished token usage was unavailable and is excluded. This comparison measures the package of changes together.
+The earlier-version and bounded lookup runs occurred at different times, the caches were left enabled, and the benchmark note was short. One bounded lookup run timed out and was restarted. Its unfinished token usage was unavailable and is excluded. This comparison measures the package of changes together.
 
 </details>
 

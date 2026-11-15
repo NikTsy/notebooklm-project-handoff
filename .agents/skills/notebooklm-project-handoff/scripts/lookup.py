@@ -34,11 +34,14 @@ def note_source(root):
     return source, note["content"]
 
 
-def snippets(sources, matcher, limit):
+def snippets(sources, matcher, limit, context):
     hits = []
     frequencies = Counter()
+    source_lines = {}
     for label, content in sources:
-        for number, line in enumerate(content.splitlines(), 1):
+        lines = content.splitlines()
+        source_lines[label] = lines
+        for number, line in enumerate(lines, 1):
             matches = list(matcher.finditer(line))
             if matches:
                 hits.append((label, number, line, matches))
@@ -50,28 +53,47 @@ def snippets(sources, matcher, limit):
         match = min(matches, key=lambda item: frequencies[item.group().casefold()])
         ranked.append((frequencies[match.group().casefold()], label, number, line, match.start()))
     ranked.sort(key=lambda hit: hit[0])
+    centers = {(label, number) for _, label, number, _, _ in ranked[:limit]}
+    emitted = set()
     for _, label, number, line, position in ranked[:limit]:
         start = max(0, position - 45)
         window = line[start:start + 220].strip()
         prefix = "…" if start else ""
         suffix = "…" if start + 220 < len(line) else ""
-        yield f"{str(label)[:240]}:{number}: {prefix}{window}{suffix}"
+        lines = source_lines[label]
+        for near in range(max(1, number - context), min(len(lines), number + context) + 1):
+            key = (label, near)
+            if key in emitted or (near != number and key in centers):
+                continue
+            emitted.add(key)
+            excerpt = f"{prefix}{window}{suffix}" if near == number else lines[near - 1].strip()[:220]
+            yield f"{str(label)[:240]}:{near}: {excerpt}"
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("pattern", help="case-insensitive regular expression")
+    parser.add_argument("--also", action="append", default=[], metavar="PATTERN", help="additional fact to search for independently")
     parser.add_argument("files", nargs="*", help="local files, defaults to the summary and README")
     parser.add_argument("--note", action="store_true", help="search the configured NotebookLM note")
+    parser.add_argument("--limit", type=int, choices=range(1, 11), default=3, help="matches per fact")
+    parser.add_argument("--context", type=int, choices=range(7), default=0, help="adjacent lines on each side (0–6)")
     parser.add_argument("--project", type=Path, default=Path.cwd(), help="project root")
-    args = parser.parse_args()
+    args = parser.parse_intermixed_args()
     if args.note and args.files:
         parser.error("--note does not take local files")
     root = args.project.resolve()
     try:
-        matcher = re.compile(args.pattern, re.IGNORECASE)
+        patterns = [args.pattern, *args.also]
+        if len(patterns) > 4:
+            parser.error("request at most four facts")
+        matchers = [re.compile(pattern, re.IGNORECASE) for pattern in patterns]
         sources = [note_source(root)] if args.note else local_sources(root, args.files)
-        print("\n".join(snippets(sources, matcher, 10)) or "No matches. Try a synonym or inspect the relevant source.")
+        sources = list(sources)
+        for pattern, matcher in zip(patterns, matchers):
+            if args.also:
+                print(f"Pattern: {pattern}")
+            print("\n".join(snippets(sources, matcher, args.limit, args.context)) or "No matches. Try a synonym or inspect the relevant source.")
     except (OSError, ValueError, KeyError, re.error, subprocess.SubprocessError) as exc:
         parser.exit(1, f"Lookup failed ({type(exc).__name__}). Check the files, pattern, or NotebookLM configuration and authentication.\n")
 
