@@ -36,6 +36,14 @@ The command returns two source-labeled excerpts in one call. In your own project
 )
 ```
 
+With Node.js, you can also install the skill files using the [skills CLI](https://github.com/vercel-labs/skills):
+
+```sh
+npx skills add NikTsy/notebooklm-project-handoff --skill notebooklm-project-handoff -a codex -y --copy
+```
+
+With this method, add or merge the two example project files yourself.
+
 If your project already had an `AGENTS.md`, merge the relevant rules from the [example](examples/AGENTS.md) into it. Replace the sample summary with your project's facts, or keep and update your existing summary. See the [summary example](examples/PROJECT_CONTEXT.md).
 
 Check local lookup before connecting a backend. On the sample summary, this finds the queued-jobs line. On your own summary, substitute a term it contains.
