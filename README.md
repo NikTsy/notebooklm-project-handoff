@@ -46,6 +46,14 @@ Each publish replaces the body of that note and reads it back before saving the 
 
 Query NotebookLM only when a material fact is still missing. If the goal or next step remains unclear after checking the available context, ask a focused question. The token benchmark below includes a handoff with a missing fact. It does not measure a stale or absent handoff separately.
 
+For a missing fact, run one targeted search:
+
+```sh
+python3 .agents/skills/notebooklm-project-handoff/scripts/lookup.py 'gateway|sensor'
+```
+
+The helper returns at most ten short matches from the local summary and README. Pass specific files to inspect code or other docs. Add `--note` only when the fact is still missing locally and a NotebookLM note is configured. That mode fetches the note by ID and filters the text before returning it to the chat.
+
 ## Push, merge, and handoff
 
 - **Handoff:** capture new facts, decisions, and open work in the existing summary, publish it, and give the user a short continuation brief.
@@ -70,11 +78,34 @@ The publisher can be run from a local scheduler if you want updates outside Code
 | --- | --- | --- |
 | Start with a **complete handoff** | **+89–90 input tokens** in pairs with the same skill catalog | Zero tool calls in either group |
 | Start with a **weak, stale, or missing handoff** | **11–20% fewer total tokens** with the skill | User clarifications fell from 4 to 0 in each scenario |
+| Replace the previous skill with **bounded lookup** | **28.4% fewer total tokens** | Same final accuracy: 18/18 in both versions |
 | **Drop two repeat photos** from the same text handoff | **25.2% fewer total tokens** | Same accuracy: 4/4 complete answers |
 
 These measurements use Codex CLI 0.169.0-alpha.11.1 and `gpt-6.1-sol` at low reasoning effort. Total tokens are reported Codex input plus output, including cached input. The tables show small samples with normal caching. They do not estimate billing or NotebookLM's internal token use.
 
-### When the chat has to find facts
+### Current vs. previous skill: bounded lookup
+
+**28.4% fewer total Codex tokens, with 18/18 correct answers in both versions.** Both groups used the skill. We reused the same three questions, two repetitions per scenario, project snapshot, and NotebookLM note.
+
+| Starting context | Previous skill | Current skill | Change | Correct answers |
+| --- | ---: | ---: | ---: | ---: |
+| Weak handoff | 701,845 | 559,247 | −20.3% | 6/6 → 6/6 |
+| Stale handoff | 731,721 | 492,748 | −32.7% | 6/6 → 6/6 |
+| No handoff | 721,968 | 490,543 | −32.1% | 6/6 → 6/6 |
+| **Total** | **2,155,534** | **1,542,538** | **−28.4%** | **18/18 → 18/18** |
+
+Commands fell from **93 to 72**, and their output shrank from **334,590 to 105,656 characters**. Both versions read NotebookLM 12 times. In the current version, each of the 12 tasks with a missing fact fetched its configured note once. The six tasks with sufficient local facts made zero NotebookLM requests.
+
+<details>
+<summary>What changed and how the comparison was run</summary>
+
+The current version returns short excerpts from local files and configured notes, carries the verified facts needed for the next step into the handoff, and records durable facts that have required repeated lookup. A separate check confirmed that a handoff saved one such fact in the local summary and updated the existing note. A fresh chat then found the fact locally.
+
+The first implementation missed one fact in a long README because common matches filled the result limit. After fixing the ranking, we repeated all 18 current-version runs and retained the earlier-version runs as the comparison. One rerun timed out and was restarted. Its unfinished token usage was unavailable and is excluded. The runs occurred at different times, the caches were left enabled, and the benchmark note was short. This comparison measures the package of changes together.
+
+</details>
+
+### Earlier comparison: skill vs. no skill
 
 **Same final accuracy in every row:** 6/6 with and without the skill. NotebookLM was used only where a fact was missing from the handoff and local files in the confirmed-input scenarios below.
 
